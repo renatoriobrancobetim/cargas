@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Fila de Operação | Rio Branco</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{
+  margin:0;
+  font-family:Arial,sans-serif;
+  background:#0A3D91;
+  color:#fff;
+  padding:20px;
+}
+.container{
+  max-width:520px;
+  margin:auto;
+}
+h2{text-align:center;}
+
+input,button{
+  width:100%;
+  padding:14px;
+  font-size:16px;
+  margin-top:10px;
+  border:none;
+  border-radius:6px;
+}
+input{color:#000;}
+button{
+  background:#D71920;
+  color:#fff;
+  cursor:pointer;
+  font-weight:bold;
+}
+button.secondary{
+  background:#FFC107;
+  color:#000;
+}
+button.danger{
+  background:#555;
+}
+
+button:disabled{
+  opacity:.6;
+  cursor:not-allowed;
+}
+
+.msg{
+  margin-top:12px;
+  text-align:center;
+  font-weight:bold;
+}
+
+/* LISTA */
+.lista{
+  margin-top:20px;
+  background:#fff;
+  color:#000;
+  border-radius:10px;
+  overflow:hidden;
+}
+.item{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:14px;
+  border-bottom:1px solid #ddd;
+}
+.item.proximo{
+  background:#FFF3CD;
+  border-left:6px solid #D71920;
+}
+.tag{
+  font-size:11px;
+  font-weight:bold;
+  color:#D71920;
+  display:flex;
+  gap:6px;
+}
+.sino{
+  animation:pulsar 1s infinite;
+}
+@keyframes pulsar{
+  0%{transform:scale(1)}
+  50%{transform:scale(1.3)}
+  100%{transform:scale(1)}
+}
+
+/* SPINNER */
+.spinner{
+  border:4px solid #f3f3f3;
+  border-top:4px solid #D71920;
+  border-radius:50%;
+  width:26px;
+  height:26px;
+  animation:spin 1s linear infinite;
+  margin:20px auto;
+}
+@keyframes spin{
+  0%{transform:rotate(0deg)}
+  100%{transform:rotate(360deg)}
+}
+
+footer{
+  margin-top:30px;
+  text-align:center;
+  font-size:12px;
+  opacity:.8;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <h2>Fila de Operação</h2>
+
+  <input id="id" placeholder="ID da carga">
+  <input id="placa" placeholder="Placa do caminhão">
+  <input id="compart" placeholder="Compartimento">
+  <input id="senha" type="password" placeholder="Senha operação">
+
+  <button onclick="entrarFila()">Entrar na Fila</button>
+  <button class="secondary" onclick="chamar()">🔔 Chamar Próximo</button>
+
+  <div class="msg" id="msg"></div>
+
+  <div class="lista" id="lista">
+    <div class="spinner"></div>
+  </div>
+</div>
+
+<footer>
+  © <span id="ano"></span> · Copywriter Renato Monteiro
+</footer>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyjSbo7fO2pmc8IjkGDarvFw0QRQs333uLt9oNVgji6fEPErcoeibiKmcLsXMTz_eGQ6w/exec";
+const CSV_FILA =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vTGd8CTXCbaCytMh6cKoXMZw2Hm4eOm7WLTt6qhBROQ3zFJWL4jGXxqElGT-0djMjkJkmsLFKLWxYWr/pub?gid=455176849&single=true&output=csv";
+
+const lista = document.getElementById("lista");
+const msg = document.getElementById("msg");
+
+function setMsg(t){ msg.textContent = t; }
+
+function post(d){
+  return fetch(SCRIPT_URL,{
+    method:"POST",
+    headers:{"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams(d)
+  }).then(r=>r.text());
+}
+
+function entrarFila(){
+  if(!id.value || !placa.value || !senha.value){
+    setMsg("⚠️ Preencha ID, placa e senha");
+    return;
+  }
+  setMsg("⏳ Enviando...");
+  post({
+    acao:"entrar_fila",
+    id:id.value,
+    placa:placa.value,
+    compart:compart.value,
+    senha:senha.value
+  }).then(r=>{
+    setMsg(r);
+    carregarFila();
+  });
+}
+
+function chamar(){
+  if(!senha.value){
+    setMsg("⚠️ Informe a senha");
+    return;
+  }
+  setMsg("⏳ Chamando...");
+  post({acao:"chamar", senha:senha.value})
+    .then(r=>{
+      setMsg(r);
+      carregarFila();
+    });
+}
+
+function remover(placa){
+  if(!confirm("Remover "+placa+" da fila?")) return;
+  post({
+    acao:"cancelar",
+    placa:placa,
+    senha:senha.value
+  }).then(r=>{
+    setMsg(r);
+    carregarFila();
+  });
+}
+
+async function carregarFila(){
+  lista.innerHTML = '<div class="spinner"></div>';
+  const r = await fetch(CSV_FILA+"&t="+Date.now());
+  const t = await r.text();
+  const linhas = t.split("\n").slice(1);
+
+  lista.innerHTML = "";
+
+  if(linhas.length===0){
+    lista.innerHTML="<div class='item'>Fila vazia</div>";
+    return;
+  }
+
+  linhas.forEach((l,i)=>{
+    const c=l.split(",");
+    lista.innerHTML+=`
+      <div class="item ${i==0?"proximo":""}">
+        <div>
+          ${i==0?'<div class="tag"><span class="sino">🔔</span>PRÓXIMO</div>':""}
+          <b>${c[2]}</b><br>Comp: ${c[3]}
+        </div>
+        <button class="danger" onclick="remover('${c[2]}')">Excluir</button>
+      </div>`;
+  });
+}
+
+carregarFila();
+setInterval(carregarFila,30000);
+document.getElementById("ano").textContent=new Date().getFullYear();
+</script>
+
+</body>
+</html>
